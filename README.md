@@ -20,7 +20,7 @@ Ce serveur Express gere les routes pour récupérer automatiquement les activit�
 
 1. Clonez le dépôt :
    ```bash
-   git clone https://github.com/mlhotellier/strava-activity-enhancer-backend.git
+   git clone https://github.com/mlhotellier/_backend_training-data-performance.re.git
    ```
 
 2. Accédez au dossier du projet :

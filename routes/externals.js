@@ -10,14 +10,6 @@ router.get('/location', authHybrid, async (req, res) => {
     if (!lat || !lon) return res.status(400).send('Latitude et longitude requises');
 
     try {
-        const existing = await ActivityDetail.findOne({
-            "location": { $ne: "" },
-        });
-
-        if (existing && existing.location) {            
-            return res.json(existing.location);
-        }
-
         const response = await axios.get(`https://nominatim.openstreetmap.org/reverse`, {
             params: {
                 lat,
@@ -44,14 +36,6 @@ router.get('/weather', authHybrid, async (req, res) => {
     }
 
     try {
-        const existing = await ActivityDetail.findOne({
-            "weather.description": { $ne: "" },
-        });
-
-        if (existing && existing.weather) {            
-            return res.json(existing.weather);
-        }
-        
         const key = process.env.VISUAL_CROSSING_KEY;
         const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${lat},${lon}/${date}`;
 

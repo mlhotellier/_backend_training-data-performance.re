@@ -138,6 +138,8 @@ router.get('/:id/streams', async (req, res) => {
           }
         );
         actLocationData = actLocation.data;
+      
+        
       } catch (err) {
         console.warn(`Erreur localisation pour activité ${id}:`, err.message);
       }
@@ -173,6 +175,7 @@ router.get('/:id/streams', async (req, res) => {
     
     // 📦 Vérifie si les streams sont déjà enregistrés
     let detail = await ActivityDetail.findOne({ activityId: id, athleteId: stravaId });
+    
 
     if (detail && detail.streams && Object.keys(detail.streams).length > 0) {
       let updated = false;

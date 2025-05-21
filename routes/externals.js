@@ -12,7 +12,6 @@ router.get('/location', authHybrid, async (req, res) => {
     try {
         const existing = await ActivityDetail.findOne({
             "location": { $ne: "" },
-            "start_latlng": [parseFloat(lat), parseFloat(lon)]
         });
 
         if (existing && existing.location) {            
@@ -45,16 +44,13 @@ router.get('/weather', authHybrid, async (req, res) => {
     }
 
     try {
+        const existing = await ActivityDetail.findOne({
+            "weather.description": { $ne: "" },
+        });
 
-        // const existing = await ActivityDetail.findOne({
-        //     "weather": { $ne: "" },
-        //     "start_latlng": [parseFloat(lat), parseFloat(lon)]
-        // });
-
-        // if (existing && existing.weather) {            
-        //     return res.json(existing.location);
-        // }
-
+        if (existing && existing.weather) {            
+            return res.json(existing.weather);
+        }
         
         const key = process.env.VISUAL_CROSSING_KEY;
         const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${lat},${lon}/${date}`;

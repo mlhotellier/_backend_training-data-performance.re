@@ -6,7 +6,6 @@ const Activity = require('../models/Activity');
 const ActivityDetail = require('../models/ActivityDetails');
 const { getValidAccessToken } = require('../utils/tokenController');
 const enrichActivitiesBatch = require('../tasks/enrichActivitiesBatch');
-const fetchWeather = require('../utils/fetchWeather');
 
 const router = express.Router();
 
@@ -112,36 +111,93 @@ router.get('/:id/streams', async (req, res) => {
     }
 
     const act = await Activity.findOne({ athleteId: stravaId, activityId: id });
-    if (!act || !act.start_latlng) {
-      return res.status(404).json({ message: 'Activité introuvable ou coordonnées manquantes' });
+    
+    if (!act) {
+      return res.status(404).json({ message: 'Activité introuvable' });
     }
 
+    let actLocationData = "";
+    let actWeatherData = "";
+
+    const hasLatLng = Array.isArray(act.start_latlng) && act.start_latlng.length === 2;
+    const hasStartDate = !!act.start_date;
+
     // 🗺 Localisation
-    const actLocation = await axios.get(
-      `${process.env.API_BASE_URL}/api/externals/location`,
-      {
-        params: {
-          lat: act.start_latlng[0],
-          lon: act.start_latlng[1],
-        },
-        headers: {
-          Authorization: `Bearer ${process.env.INTERNAL_TASK_TOKEN}`,
-        },
+    if (hasLatLng) {
+      try {
+        const actLocation = await axios.get(
+          `${process.env.API_BASE_URL}/api/externals/location`,
+          {
+            params: {
+              lat: act.start_latlng[0],
+              lon: act.start_latlng[1],
+            },
+            headers: {
+              Authorization: `Bearer ${process.env.INTERNAL_TASK_TOKEN}`,
+            },
+          }
+        );
+        actLocationData = actLocation.data;
+      } catch (err) {
+        console.warn(`Erreur localisation pour activité ${id}:`, err.message);
       }
-    );
+    }
+
+    // ☀️ Météo
+    if (hasLatLng && hasStartDate) {
+
+      const startDate = new Date(act.start_date);
+      const weatherParams = {
+        lat: act.start_latlng[0],
+        lon: act.start_latlng[1],
+        date: startDate.toISOString().slice(0, 10), // "YYYY-MM-DD"
+        hour: startDate.getUTCHours(),
+        minute: startDate.getUTCMinutes(),
+      };
+
+      try {
+        const actWeather = await axios.get(
+          `${process.env.API_BASE_URL}/api/externals/weather`,
+          {
+            params: weatherParams,
+            headers: {
+              Authorization: `Bearer ${process.env.INTERNAL_TASK_TOKEN}`,
+            },
+          }
+        );
+        actWeatherData = actWeather.data;
+      } catch (err) {
+        console.warn(`Erreur météo pour activité ${id}:`, err.message);
+      }
+    }
     
     // 📦 Vérifie si les streams sont déjà enregistrés
     let detail = await ActivityDetail.findOne({ activityId: id, athleteId: stravaId });
 
     if (detail && detail.streams && Object.keys(detail.streams).length > 0) {
-      if (!detail.location && actLocation?.data) {
-        detail.location = actLocation.data;
+      let updated = false;
+
+      if (!detail.location && actLocationData) {
+        detail.location = actLocationData;
+        updated = true;
+      }
+
+      const isWeatherEmpty = !detail.weather ||
+        (detail.weather.description === "" && detail.weather.temperature === 0);
+
+      if (isWeatherEmpty && actWeatherData) {
+        detail.weather = actWeatherData;
+        updated = true;
+      }
+
+      if (updated) {
         await detail.save();
       }
 
       return res.json({
         streams: detail.streams,
-        location: detail.location || actLocation.data,
+        location: detail.location || actLocationData,
+        weather: detail.weather || actWeatherData,
       });
     }
 
@@ -175,13 +231,18 @@ router.get('/:id/streams', async (req, res) => {
         activityId: id,
         athleteId: stravaId,
         streams: data,
-        location: actLocation.data,
+        location: actLocationData || null,
+        weather: actWeatherData || null,
       });
+    } else {
+      detail.streams = data;
+      if (actLocationData) detail.location = actLocationData;
+      if (actWeatherData) detail.weather = actWeatherData;
     }
 
     await detail.save();
 
-    res.json({ streams: data, location: actLocation.data });
+    res.json({ streams: data, location: actLocationData, weather: actWeatherData });
   } catch (error) {
     console.error('Erreur backend:', error.message);
     res.status(500).json({ message: 'Erreur lors de la récupération et enrichissement des streams.' });
